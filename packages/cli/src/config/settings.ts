@@ -129,8 +129,15 @@ export interface Settings {
   /// IDE mode setting configured via slash command toggle.
   ideMode?: boolean;
 
+
   // Setting to track if the user has seen the IDE integration nudge.
   hasSeenIdeIntegrationNudge?: boolean;
+
+  // Default provider to use when no provider is set via `/provider`
+  defaultProvider?: string;
+  
+  // Default model to use when no model is specified
+  defaultModel?: string;
 
   // Setting for disabling auto-update.
   disableAutoUpdate?: boolean;
