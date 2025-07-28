@@ -14,7 +14,7 @@ import {
 import { readFileSync, existsSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
-import { Settings, USER_SETTINGS_PATH } from '../config/settings.js';
+import { Settings, USER_SETTINGS_PATH, SETTINGS_DIRECTORY_NAME } from '../config/settings.js';
 import stripJsonComments from 'strip-json-comments';
 
 let providerManagerInstance: ProviderManager | null = null;
@@ -23,25 +23,68 @@ export function getProviderManager(config?: Config): ProviderManager {
   if (!providerManagerInstance) {
     providerManagerInstance = new ProviderManager();
 
+    // Prepare settings and saved keys
+    let savedApiKeys: Record<string, string> = {};
+    let userSettings: Settings | undefined;
+
     // Only auto-initialize providers when not in test environment
+    // Additionally, load workspace-scoped settings (which should override user settings)
     if (process.env.NODE_ENV !== 'test') {
-      // Load user settings to check for saved API keys
-      let savedApiKeys: Record<string, string> = {};
-      let userSettings: Settings | undefined;
+      // Load user settings file
       try {
         if (existsSync(USER_SETTINGS_PATH)) {
           const userContent = readFileSync(USER_SETTINGS_PATH, 'utf-8');
           userSettings = JSON.parse(stripJsonComments(userContent)) as Settings;
           savedApiKeys = userSettings.providerApiKeys || {};
         }
-      } catch (_error) {
-        // Failed to load user settings, that's OK
+      } catch (error) {
+        if (process.env.DEBUG || process.env.VERBOSE) {
+          console.debug('[ProviderManager] Failed to load user settings:', error instanceof Error ? error.message : error);
+        }
+      }
+
+      // Also load workspace settings (override user settings)
+      try {
+        const workspaceSettingsPath = join(
+          process.cwd(),
+          SETTINGS_DIRECTORY_NAME,
+          'settings.json',
+        );
+        if (existsSync(workspaceSettingsPath)) {
+          const workspaceContent = readFileSync(workspaceSettingsPath, 'utf-8');
+          const workspaceSettings = JSON.parse(
+            stripJsonComments(workspaceContent),
+          ) as Settings;
+
+          // Merge workspace settings into userSettings, overriding duplicate keys
+          userSettings = {
+            ...userSettings,
+            ...workspaceSettings,
+          } as Settings;
+
+          // Merge providerApiKeys separately to avoid clobbering
+          if (workspaceSettings.providerApiKeys) {
+            savedApiKeys = {
+              ...savedApiKeys,
+              ...workspaceSettings.providerApiKeys,
+            };
+          }
+        }
+      } catch (error) {
+        if (process.env.DEBUG || process.env.VERBOSE) {
+          console.debug('[ProviderManager] Failed to load workspace settings:', error instanceof Error ? error.message : error);
+        }
       }
 
       // Register GeminiProvider
+      // Apply user-configured Gemini base URL
+      const geminiBaseUrl = userSettings?.providerBaseUrls?.gemini ?? process.env.GEMINI_BASE_URL;
+      if (geminiBaseUrl) {
+        process.env.GEMINI_BASE_URL = geminiBaseUrl;
+      }
       const geminiProvider = new GeminiProvider();
 
-      // Set initial model from settings if available
+            // Set initial model and base URLs from settings if available
       if (userSettings?.defaultModel) {
         geminiProvider.setModel(userSettings.defaultModel);
       }
@@ -64,8 +107,11 @@ export function getProviderManager(config?: Config): ProviderManager {
           if (geminiApiKey) {
             geminiProvider.setApiKey(geminiApiKey);
           }
-        } catch (_error) {
-          // No Google keyfile available, that's OK - will use OAuth if available
+        } catch (error) {
+          if (process.env.DEBUG || process.env.VERBOSE) {
+            console.debug('[ProviderManager] No Google keyfile found:', error instanceof Error ? error.message : error);
+          }
+          // Will fall back to OAuth
         }
       }
 
@@ -81,12 +127,14 @@ export function getProviderManager(config?: Config): ProviderManager {
         try {
           const apiKeyPath = join(homedir(), '.openai_key');
           openaiApiKey = readFileSync(apiKeyPath, 'utf-8').trim();
-        } catch (_error) {
-          // No OpenAI keyfile available, that's OK
+        } catch (error) {
+          if (process.env.DEBUG || process.env.VERBOSE) {
+            console.debug('[ProviderManager] No OpenAI keyfile found:', error instanceof Error ? error.message : error);
+          }
         }
       }
 
-      const openaiBaseUrl = process.env.OPENAI_BASE_URL;
+      const openaiBaseUrl = userSettings?.providerBaseUrls?.openai ?? process.env.OPENAI_BASE_URL;
       if (process.env.DEBUG || process.env.VERBOSE) {
         console.log('[ProviderManager] Initializing OpenAI provider with:', {
           hasApiKey: !!openaiApiKey,
@@ -113,18 +161,36 @@ export function getProviderManager(config?: Config): ProviderManager {
         try {
           const apiKeyPath = join(homedir(), '.anthropic_key');
           anthropicApiKey = readFileSync(apiKeyPath, 'utf-8').trim();
-        } catch (_error) {
-          // No Anthropic keyfile available, that's OK
+        } catch (error) {
+          if (process.env.DEBUG || process.env.VERBOSE) {
+            console.debug('[ProviderManager] No Anthropic keyfile found:', error instanceof Error ? error.message : error);
+          }
         }
       }
 
-      const anthropicBaseUrl = process.env.ANTHROPIC_BASE_URL;
+      const anthropicBaseUrl = userSettings?.providerBaseUrls?.anthropic ?? process.env.ANTHROPIC_BASE_URL;
       const anthropicProvider = new AnthropicProvider(
         anthropicApiKey || '',
         anthropicBaseUrl,
       );
       providerManagerInstance.registerProvider(anthropicProvider);
       // Anthropic provider registered
+    }
+    // Determine desired default/active provider
+    const desiredProvider = userSettings?.defaultProvider;
+
+    if (process.env.DEBUG || process.env.VERBOSE) {
+      console.debug('[ProviderManager] Available providers:', providerManagerInstance.listProviders());
+      console.debug('[ProviderManager] Desired default provider:', desiredProvider);
+    }
+    if (desiredProvider && providerManagerInstance.listProviders().includes(desiredProvider)) {
+      try {
+        providerManagerInstance.setActiveProvider(desiredProvider);
+      } catch (error) {
+        if (process.env.DEBUG || process.env.VERBOSE) {
+          console.debug('[ProviderManager] Failed to set active provider:', desiredProvider, error instanceof Error ? error.message : error);
+        }
+      }
     }
   }
 

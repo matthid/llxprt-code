@@ -116,6 +116,8 @@ export interface Settings {
   // Add other settings here.
   ideMode?: boolean;
 
+  // Default provider to use when no provider is set via `/provider`
+  defaultProvider?: string;
   // Default model to use when no model is specified
   defaultModel?: string;
 
