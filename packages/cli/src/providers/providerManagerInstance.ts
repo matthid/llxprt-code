@@ -185,6 +185,23 @@ export function getProviderManager(
         }
       }
     }
+
+    // Apply defaultModel to the now-active provider (if supported)
+    if (userSettings?.defaultModel) {
+      try {
+        const activeProvider = providerManagerInstance.getActiveProvider();
+        if (typeof activeProvider.setModel === 'function') {
+          activeProvider.setModel(userSettings.defaultModel);
+        }
+      } catch (error) {
+        if (process.env.DEBUG || process.env.VERBOSE) {
+          console.debug(
+            '[ProviderManager] Failed to set default model:',
+            error instanceof Error ? error.message : error,
+          );
+        }
+      }
+    }
   }
 
   return providerManagerInstance;
