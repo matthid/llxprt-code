@@ -82,10 +82,12 @@ export async function parseArguments(): Promise<CliArgs> {
       alias: 'm',
       type: 'string',
       description: `Model`,
+      // Only set a default model when specified via environment variables.
+      // This allows user or workspace settings (defaultModel) to take precedence
+      // when the CLI flag is not explicitly provided.
       default:
         process.env.LLXPRT_DEFAULT_MODEL ||
-        process.env.GEMINI_MODEL ||
-        DEFAULT_GEMINI_MODEL,
+        process.env.GEMINI_MODEL,
     })
     .option('prompt', {
       alias: 'p',
@@ -204,7 +206,7 @@ export async function parseArguments(): Promise<CliArgs> {
     .option('provider', {
       type: 'string',
       description: 'The provider to use.',
-      default: process.env.LLXPRT_DEFAULT_PROVIDER || 'gemini',
+      default: process.env.LLXPRT_DEFAULT_PROVIDER,  // Only use env var if set
     })
     .option('ide-mode', {
       type: 'boolean',
