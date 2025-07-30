@@ -84,10 +84,7 @@ export function getProviderManager(config?: Config): ProviderManager {
       }
       const geminiProvider = new GeminiProvider();
 
-            // Set initial model and base URLs from settings if available
-      if (userSettings?.defaultModel) {
-        geminiProvider.setModel(userSettings.defaultModel);
-      }
+            // Defer applying defaultModel until the active provider is known
 
       if (config) {
         geminiProvider.setConfig(config);
@@ -189,6 +186,20 @@ export function getProviderManager(config?: Config): ProviderManager {
       } catch (error) {
         if (process.env.DEBUG || process.env.VERBOSE) {
           console.debug('[ProviderManager] Failed to set active provider:', desiredProvider, error instanceof Error ? error.message : error);
+        }
+      }
+    }
+
+    // Apply defaultModel to the now-active provider (if supported)
+    if (userSettings?.defaultModel) {
+      try {
+        const activeProvider = providerManagerInstance.getActiveProvider();
+        if (typeof activeProvider.setModel === 'function') {
+          activeProvider.setModel(userSettings.defaultModel);
+        }
+      } catch (error) {
+        if (process.env.DEBUG || process.env.VERBOSE) {
+          console.debug('[ProviderManager] Failed to set default model:', error instanceof Error ? error.message : error);
         }
       }
     }
