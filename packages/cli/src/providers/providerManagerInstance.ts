@@ -76,12 +76,23 @@ export function getProviderManager(
       // Failed to load user settings, that's OK
     }
 
+    const savedApiKeys: Record<string, string> = userSettings?.providerApiKeys || {};
+    const providerBaseUrls: Record<string, string> = userSettings?.providerBaseUrls || {};
+
     // Only auto-initialize providers when not in test environment
     if (process.env.NODE_ENV !== 'test') {
       // Register Gemini provider
       const geminiProvider = new GeminiProvider(undefined, undefined, config);
       if (config) {
         geminiProvider.setConfig(config);
+      }
+      // Apply default model from user settings to Gemini immediately
+      if (userSettings?.defaultModel) {
+        try {
+          geminiProvider.setModel(userSettings.defaultModel);
+        } catch (_err) {
+          // Non-fatal if model can't be set here
+        }
       }
       providerManagerInstance.registerProvider(geminiProvider);
 
@@ -98,11 +109,16 @@ export function getProviderManager(
         // No Google keyfile available, that's OK - will use OAuth if available
       }
 
+      // Apply saved API key from settings for Gemini if present
+      if (userSettings?.providerApiKeys?.gemini) {
+        geminiProvider.setApiKey(sanitizeApiKey(userSettings.providerApiKeys.gemini));
+      }
+
       // Initialize OpenAI provider
       // Priority: Environment variable > keyfile
-      let openaiApiKey: string | undefined;
+      let openaiApiKey: string | undefined = savedApiKeys.openai;
 
-      if (process.env.OPENAI_API_KEY) {
+      if (!openaiApiKey && process.env.OPENAI_API_KEY) {
         openaiApiKey = sanitizeApiKey(process.env.OPENAI_API_KEY);
       }
 
@@ -118,7 +134,7 @@ export function getProviderManager(
         }
       }
 
-      const openaiBaseUrl = process.env.OPENAI_BASE_URL;
+      const openaiBaseUrl = providerBaseUrls.openai || process.env.OPENAI_BASE_URL;
       if (process.env.DEBUG || process.env.VERBOSE) {
         console.log('[ProviderManager] Initializing OpenAI provider with:', {
           hasApiKey: !!openaiApiKey,
@@ -143,9 +159,9 @@ export function getProviderManager(
 
       // Initialize Anthropic provider
       // Priority: Environment variable > keyfile
-      let anthropicApiKey: string | undefined;
+      let anthropicApiKey: string | undefined = savedApiKeys.anthropic;
 
-      if (process.env.ANTHROPIC_API_KEY) {
+      if (!anthropicApiKey && process.env.ANTHROPIC_API_KEY) {
         anthropicApiKey = sanitizeApiKey(process.env.ANTHROPIC_API_KEY);
       }
 
@@ -161,7 +177,7 @@ export function getProviderManager(
         }
       }
 
-      const anthropicBaseUrl = process.env.ANTHROPIC_BASE_URL;
+      const anthropicBaseUrl = providerBaseUrls.anthropic || process.env.ANTHROPIC_BASE_URL;
       const anthropicProviderConfig = {
         allowBrowserEnvironment,
       };

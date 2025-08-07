@@ -497,6 +497,7 @@ export async function loadCliConfig(
   const finalModel =
     argv.model ||
     profileModel ||
+    effectiveSettings.defaultModel ||
     process.env.LLXPRT_DEFAULT_MODEL ||
     process.env.GEMINI_MODEL ||
     DEFAULT_GEMINI_MODEL;
@@ -505,6 +506,7 @@ export async function loadCliConfig(
   const finalProvider =
     argv.provider ||
     profileProvider ||
+    effectiveSettings.defaultProvider ||
     process.env.LLXPRT_DEFAULT_PROVIDER ||
     'gemini';
 
