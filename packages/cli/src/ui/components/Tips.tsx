@@ -17,7 +17,7 @@ export const Tips: React.FC<TipsProps> = ({ config }) => {
   const llxprtMdFileCount = config.getLlxprtMdFileCount();
   return (
     <Box flexDirection="column">
-      <Text color={Colors.Foreground}>Tips for getting started:</Text>
+      <Text color={Colors.Foreground}>Tips for getting started (custom build):</Text>
       <Text color={Colors.Foreground}>
         1. Ask questions, edit files, or run commands.
       </Text>
